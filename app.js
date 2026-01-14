@@ -171,7 +171,7 @@ class WorkTrackerApp {
     if (!window.indexedDB) return;
 
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open("WorkTrackerDB", 1);
+      const request = indexedDB.open("WorkTrackerDB", 3); // Увеличиваем версию до 3
 
       request.onerror = (event) => {
         console.error("IndexedDB ошибка:", event.target.error);
@@ -180,25 +180,48 @@ class WorkTrackerApp {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-        if (!db.objectStoreNames.contains("data")) {
-          db.createObjectStore("data", { keyPath: "id" });
+        // Удаляем старую структуру и создаем новую
+        if (db.objectStoreNames.contains("data")) {
+          db.deleteObjectStore("data");
         }
+        db.createObjectStore("data", { keyPath: "id" });
       };
 
       request.onsuccess = (event) => {
         const db = event.target.result;
-        const transaction = db.transaction(["data"], "readwrite");
-        const store = transaction.objectStore("data");
 
-        const putRequest = store.put({ id: "main", data: this.data });
+        // Закрываем старую базу если была открыта с другой версией
+        db.close();
 
-        putRequest.onsuccess = () => {
-          console.log("Данные сохранены в IndexedDB");
-          resolve();
+        // Открываем заново с новой версией
+        const newRequest = indexedDB.open("WorkTrackerDB", 3);
+
+        newRequest.onsuccess = (e) => {
+          const newDb = e.target.result;
+          const transaction = newDb.transaction(["data"], "readwrite");
+          const store = transaction.objectStore("data");
+
+          const putRequest = store.put({
+            id: "main",
+            data: this.data,
+            timestamp: new Date().toISOString(),
+          });
+
+          putRequest.onsuccess = () => {
+            console.log("Данные сохранены в IndexedDB");
+            newDb.close();
+            resolve();
+          };
+
+          putRequest.onerror = (e) => {
+            console.error("Ошибка сохранения в IndexedDB:", e.target.error);
+            newDb.close();
+            reject(e.target.error);
+          };
         };
 
-        putRequest.onerror = (e) => {
-          console.error("Ошибка сохранения в IndexedDB:", e.target.error);
+        newRequest.onerror = (e) => {
+          console.error("Ошибка открытия новой версии:", e.target.error);
           reject(e.target.error);
         };
       };
@@ -434,14 +457,198 @@ class WorkTrackerApp {
     console.log("Обработчики событий настроены");
 
     // Глобальный обработчик для отладки кликов по календарю
-    document.addEventListener("click", (e) => {
-      if (e.target.closest(".calendar-day:not(.empty)")) {
-        console.log("Calendar day clicked via global handler");
+    // document.addEventListener("click", (e) => {
+    //   if (e.target.closest(".calendar-day:not(.empty)")) {
+    //     console.log("Calendar day clicked via global handler");
+    //   }
+    // });
+
+    // Добавляем обработчики свайпа
+    this.setupSwipeHandlers();
+  }
+
+  // Метод для свайпа:
+  setupSwipeHandlers() {
+    const calendarGrid = document.getElementById("calendarGrid");
+    if (!calendarGrid) return;
+
+    calendarGrid.addEventListener(
+      "touchstart",
+      (e) => {
+        this.touchStartX = e.changedTouches[0].screenX;
+      },
+      { passive: true }
+    );
+
+    calendarGrid.addEventListener(
+      "touchend",
+      (e) => {
+        this.touchEndX = e.changedTouches[0].screenX;
+        this.handleSwipe();
+      },
+      { passive: true }
+    );
+
+    // Для десктопа - поддержка мыши
+    let mouseStartX = 0;
+    let mouseEndX = 0;
+
+    calendarGrid.addEventListener("mousedown", (e) => {
+      mouseStartX = e.clientX;
+    });
+
+    calendarGrid.addEventListener("mouseup", (e) => {
+      mouseEndX = e.clientX;
+      const diff = mouseEndX - mouseStartX;
+
+      if (Math.abs(diff) > this.swipeThreshold) {
+        if (diff > 0) {
+          this.changeMonth(-1); // Свайп вправо - предыдущий месяц
+        } else {
+          this.changeMonth(1); // Свайп влево - следующий месяц
+        }
       }
     });
   }
 
-  // Добавьте этот новый метод после setupEventListeners:
+  handleSwipe() {
+    const diff = this.touchStartX - this.touchEndX;
+
+    if (Math.abs(diff) > this.swipeThreshold) {
+      if (diff > 0) {
+        this.changeMonth(1); // Свайп влево - следующий месяц
+        this.showToast("Месяц", "Следующий месяц", "info");
+      } else {
+        this.changeMonth(-1); // Свайп вправо - предыдущий месяц
+        this.showToast("Месяц", "Предыдущий месяц", "info");
+      }
+    }
+  }
+
+  // Метод для обновления сводки месяца:
+  updateMonthSummary() {
+    const monthKey = this.getMonthKey();
+    const monthData = this.data.months[monthKey] || { days: {} };
+    const days = monthData.days;
+
+    // Считаем статистику
+    const workingDays = Object.keys(days).length;
+    const monthTotal = monthData.calculated?.total || 0;
+
+    // Обновляем заголовок
+    document.getElementById(
+      "workingDaysCount"
+    ).textContent = `${workingDays} рабочих ${this.getDayWord(workingDays)}`;
+    document.getElementById(
+      "monthTotal"
+    ).textContent = `${monthTotal.toLocaleString()} ₽`;
+
+    // Обновляем список дней
+    this.updateDaysList(days);
+  }
+
+  // Вспомогательный метод для склонения "день/дня/дней":
+  getDayWord(count) {
+    if (count % 10 === 1 && count % 100 !== 11) return "день";
+    if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100))
+      return "дня";
+    return "дней";
+  }
+
+  // Метод для обновления списка дней:
+  updateDaysList(days) {
+    const container = document.getElementById("daysList");
+    if (!container) return;
+
+    if (Object.keys(days).length === 0) {
+      container.innerHTML = `
+      <div class="empty-summary">
+        <i class="fas fa-calendar-times"></i>
+        <p>Нет данных за этот месяц</p>
+      </div>
+    `;
+      return;
+    }
+
+    const sortedDays = Object.entries(days).sort((a, b) => {
+      const dayA = parseInt(a[0].split("-")[2]);
+      const dayB = parseInt(b[0].split("-")[2]);
+      return dayA - dayB;
+    });
+
+    let html = "";
+
+    sortedDays.forEach(([dayKey, dayData]) => {
+      const day = parseInt(dayKey.split("-")[2]);
+      const month = parseInt(dayKey.split("-")[1]);
+      const year = parseInt(dayKey.split("-")[0]);
+
+      const date = new Date(year, month - 1, day);
+
+      const dayFormatted = String(day).padStart(2, "0");
+      const monthFormatted = String(month).padStart(2, "0");
+      const weekdayShort = date.toLocaleDateString("ru-RU", {
+        weekday: "short",
+      });
+
+      const fullDate = `${dayFormatted}.${monthFormatted}.${year} ${weekdayShort}`;
+
+      // Форматируем время
+      let totalHours = dayData.totalHours || 0;
+      if (!totalHours && dayData.timeStart && dayData.timeEnd) {
+        totalHours = this.calculateWorkHours(
+          dayData.timeStart,
+          dayData.timeEnd
+        );
+      }
+
+      const formattedHours = this.formatWorkHours(totalHours);
+
+      let detailsHTML = "";
+      if (dayData.entries && dayData.entries.length > 0) {
+        dayData.entries.forEach((entry) => {
+          detailsHTML += `
+          <div class="position-item">
+            <div class="position-item-info">
+              <span>${entry.positionName}</span>
+            </div>
+            <div class="position-item-quantity">
+              <span>${entry.quantity} × ${entry.price.toLocaleString()} ₽</span>
+            </div>
+          </div>
+        `;
+        });
+      }
+
+      html += `
+<div class="day-summary-item" data-day="${day}">
+  <div class="day-summary-header">
+    <div class="day-summary-date">
+      ${fullDate}
+    </div>
+    <div class="day-summary-total">
+      <span class="day-summary-hours">${formattedHours}</span>
+      <span class="day-summary-amount">${dayData.dailyTotal.toLocaleString()} ₽</span>
+    </div>
+  </div>
+  ${detailsHTML ? `<div class="day-summary-details">${detailsHTML}</div>` : ""}
+</div>
+`;
+    });
+
+    container.innerHTML = html;
+
+    // Добавляем обработчики кликов на дни в сводке
+    container.querySelectorAll(".day-summary-item").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        const day = parseInt(item.dataset.day);
+        this.selectedDay = day;
+        this.currentDay = day;
+        this.openDayForm(day);
+      });
+    });
+  }
+
   setupDelegatedEventListeners() {
     // Удаляем старые обработчики если были
     document.removeEventListener("click", this.handleDocumentClick);
@@ -513,22 +720,26 @@ class WorkTrackerApp {
       }
     });
 
-    // Скрываем статистику и календарь по умолчанию
+    // Скрываем статистику, календарь и сводку по умолчанию
     const statsGrid = document.getElementById("statsGrid");
     const calendarSection = document.querySelector(".calendar-section");
+    const monthSummarySection = document.getElementById("monthSummarySection");
 
     if (statsGrid) statsGrid.style.display = "none";
     if (calendarSection) calendarSection.style.display = "none";
+    if (monthSummarySection) monthSummarySection.style.display = "none"; // Добавляем скрытие сводки
 
     // Показываем нужную секцию
     if (section === "calendar") {
       // Для календаря показываем основной контент
       if (statsGrid) statsGrid.style.display = "grid";
       if (calendarSection) calendarSection.style.display = "block";
+      if (monthSummarySection) monthSummarySection.style.display = "block"; // Показываем сводку
 
       // Обновляем интерфейс
       this.updateCalendar();
       this.updateStats();
+      this.updateMonthSummary(); // Обновляем сводку
     } else {
       const targetElement = document.getElementById(`${section}Section`);
       if (targetElement) {
@@ -569,6 +780,12 @@ class WorkTrackerApp {
   showCalendar() {
     this.showSection("calendar");
 
+    // Явно показываем сводку
+    const monthSummarySection = document.getElementById("monthSummarySection");
+    if (monthSummarySection) {
+      monthSummarySection.style.display = "block";
+    }
+
     // Восстанавливаем стандартную кнопку плюса
     const quickAddBtn = document.getElementById("quickAddBtn");
     if (quickAddBtn) {
@@ -604,6 +821,19 @@ class WorkTrackerApp {
 
     this.updateCalendar();
     this.updateStats();
+    this.updateMonthSummary(); // Добавляем обновление сводки
+
+    // Убеждаемся, что сводка видна при переключении месяца
+    const monthSummarySection = document.getElementById("monthSummarySection");
+    if (monthSummarySection && this.isCalendarVisible()) {
+      monthSummarySection.style.display = "block";
+    }
+  }
+
+  // Проверяем, виден ли календарь
+  isCalendarVisible() {
+    const calendarSection = document.getElementById("calendarSection");
+    return calendarSection && calendarSection.style.display !== "none";
   }
 
   goToToday() {
@@ -771,35 +1001,130 @@ class WorkTrackerApp {
     `;
     }
 
-    document.getElementById("calendarGrid").innerHTML = calendarHTML;
-
-    // Удаляем старые обработчики
     const calendarGrid = document.getElementById("calendarGrid");
-    calendarGrid.replaceWith(calendarGrid.cloneNode(true));
+    calendarGrid.innerHTML = calendarHTML;
 
-    // Добавляем обработчик делегирования событий
-    document.getElementById("calendarGrid").addEventListener("click", (e) => {
+    // Очищаем старые обработчики через клонирование
+    const newCalendarGrid = calendarGrid.cloneNode(true);
+    calendarGrid.parentNode.replaceChild(newCalendarGrid, calendarGrid);
+
+    // Устанавливаем обработчики на новом элементе
+    this.setupCalendarHandlers(newCalendarGrid);
+  }
+
+  // Новый метод для установки всех обработчиков календаря
+  setupCalendarHandlers(calendarGrid) {
+    let lastClickTime = 0;
+    let lastClickDay = null;
+
+    // Обработчик клика для одинарного и двойного клика
+    calendarGrid.addEventListener("click", (e) => {
       const dayElement = e.target.closest(".calendar-day:not(.empty)");
       if (!dayElement) return;
 
       const dayNumber = parseInt(dayElement.dataset.day);
+      const currentTime = Date.now();
 
-      // Удаляем выделение у всех дней
+      // Проверяем двойной клик (клик на тот же день в течение 300мс)
+      if (lastClickDay === dayNumber && currentTime - lastClickTime < 300) {
+        // Двойной клик - открываем форму
+        e.preventDefault();
+        e.stopPropagation();
+
+        this.selectedDay = dayNumber;
+        this.currentDay = dayNumber;
+        this.openDayForm(dayNumber);
+
+        // Сбрасываем значения
+        lastClickTime = 0;
+        lastClickDay = null;
+
+        this.showToast(
+          "День открыт",
+          `Редактирование ${dayNumber} ${this.getMonthName(
+            this.currentMonth
+          ).toLowerCase()}`,
+          "info"
+        );
+
+        return; // Выходим, не выполняем одинарный клик
+      }
+
+      // Одинарный клик - выделяем день
+      lastClickDay = dayNumber;
+      lastClickTime = currentTime;
+
+      // Выделяем день
       document.querySelectorAll(".calendar-day").forEach((d) => {
         d.classList.remove("selected");
       });
-
-      // Выделяем выбранный день
       dayElement.classList.add("selected");
 
-      // Сохраняем выбранный день
       this.selectedDay = dayNumber;
       this.currentDay = dayNumber;
-
-      // Обновляем кнопку на нижней панели
       this.updateBottomButton(dayNumber);
 
-      console.log("День выбран:", dayNumber, "selectedDay:", this.selectedDay);
+      // Сбрасываем через 300мс
+      setTimeout(() => {
+        lastClickTime = 0;
+        lastClickDay = null;
+      }, 300);
+    });
+
+    // Добавляем обработчики свайпа
+    this.setupCalendarSwipeHandlers(calendarGrid);
+  }
+
+  // Метод для обработки свайпа в календаре:
+  setupCalendarSwipeHandlers(calendarGrid) {
+    let touchStartX = 0;
+    let touchEndX = 0;
+    const swipeThreshold = 50;
+
+    calendarGrid.addEventListener(
+      "touchstart",
+      (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+      },
+      { passive: true }
+    );
+
+    calendarGrid.addEventListener(
+      "touchend",
+      (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        const diff = touchStartX - touchEndX;
+
+        if (Math.abs(diff) > swipeThreshold) {
+          if (diff > 0) {
+            this.changeMonth(1); // Свайп влево - следующий месяц
+          } else {
+            this.changeMonth(-1); // Свайп вправо - предыдущий месяц
+          }
+        }
+      },
+      { passive: true }
+    );
+
+    // Для десктопа
+    let mouseStartX = 0;
+    let mouseEndX = 0;
+
+    calendarGrid.addEventListener("mousedown", (e) => {
+      mouseStartX = e.clientX;
+    });
+
+    calendarGrid.addEventListener("mouseup", (e) => {
+      mouseEndX = e.clientX;
+      const diff = mouseEndX - mouseStartX;
+
+      if (Math.abs(diff) > swipeThreshold) {
+        if (diff > 0) {
+          this.changeMonth(-1); // Свайп вправо - предыдущий месяц
+        } else {
+          this.changeMonth(1); // Свайп влево - следующий месяц
+        }
+      }
     });
   }
 
@@ -861,6 +1186,11 @@ class WorkTrackerApp {
     document.getElementById(
       "perPersonAmount"
     ).textContent = `${perPerson.toLocaleString()} ₽`;
+
+    // Обновляем сводку только если календарь видим
+    if (this.isCalendarVisible()) {
+      this.updateMonthSummary();
+    }
   }
 
   shouldRecalculate(monthData) {
@@ -912,22 +1242,43 @@ class WorkTrackerApp {
     const monthKey = this.getMonthKey();
     const dayKey = this.getDayKey(day);
     const monthData = this.data.months[monthKey] || { days: {} };
-    const dayData = monthData.days[dayKey] || { entries: [], dailyTotal: 0 };
+    const dayData = monthData.days[dayKey] || {
+      entries: [],
+      dailyTotal: 0,
+      timeStart: "08:00",
+      timeEnd: "17:00",
+    };
 
-    // Обновляем заголовок
+    // Обновляем заголовок в формате "01.01.2026 Пт"
     const date = new Date(this.currentYear, this.currentMonth, day);
-    const formatter = new Intl.DateTimeFormat("ru-RU", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      weekday: "long",
-    });
-    document.getElementById("dayTitle").textContent = formatter.format(date);
+    const dayFormatted = String(day).padStart(2, "0");
+    const monthFormatted = String(this.currentMonth + 1).padStart(2, "0");
+    const weekdayShort = date.toLocaleDateString("ru-RU", { weekday: "short" });
+
+    const fullDate = `${dayFormatted}.${monthFormatted}.${this.currentYear} ${weekdayShort}`;
+    document.getElementById("dayTitle").textContent = fullDate;
 
     // Загружаем записи
     this.loadDayEntries(dayData.entries);
 
-    // Обновляем итог
+    // Устанавливаем время работы из сохраненных данных
+    setTimeout(() => {
+      const workTimeStart = document.getElementById("workTimeStart");
+      const workTimeEnd = document.getElementById("workTimeEnd");
+
+      if (workTimeStart && dayData.timeStart) {
+        workTimeStart.value = dayData.timeStart;
+      }
+
+      if (workTimeEnd && dayData.timeEnd) {
+        workTimeEnd.value = dayData.timeEnd;
+      }
+
+      // Обновляем итог
+      this.updateDayTotal();
+    }, 100);
+
+    // Обновляем итог в заголовке формы
     document.getElementById(
       "dayTotalValue"
     ).textContent = `${dayData.dailyTotal.toLocaleString()} ₽`;
@@ -952,14 +1303,76 @@ class WorkTrackerApp {
         }
       }
     }, 200);
-
-    // Показываем форму
-    this.showSection("dayForm");
   }
 
   loadDayEntries(entries) {
     const container = document.getElementById("entriesList");
     container.innerHTML = "";
+
+    // Создаем блок для времени работы если его нет
+    const daySummaryContent = document.querySelector(".day-summary-content");
+    if (daySummaryContent && !document.getElementById("dayWorkHours")) {
+      // Создаем блок для времени работы
+      const workHoursHTML = `
+  <div class="day-work-hours" id="dayWorkHours">
+    <div class="work-hours-header">
+      <div class="work-hours-label">Время работы</div>
+      <div class="work-hours-inputs">
+        <input type="time" id="workTimeStart" class="input work-time-input" 
+               value="08:00" placeholder="Начало">
+        <span class="work-hours-separator">—</span>
+        <input type="time" id="workTimeEnd" class="input work-time-input" 
+               value="17:00" placeholder="Конец">
+      </div>
+    </div>
+  </div>
+  `;
+
+      // Проверяем, есть ли уже блок с временем
+      if (!document.getElementById("dayWorkHours")) {
+        // Вставляем после day-summary и перед entries-list
+        const daySummary = document.querySelector(".day-summary");
+        if (daySummary) {
+          daySummary.insertAdjacentHTML("afterend", workHoursHTML);
+        }
+      }
+
+      // Добавляем обработчики
+      setTimeout(() => {
+        const workTimeStart = document.getElementById("workTimeStart");
+        const workTimeEnd = document.getElementById("workTimeEnd");
+
+        if (workTimeStart) {
+          workTimeStart.addEventListener("change", () => this.updateDayTotal());
+        }
+        if (workTimeEnd) {
+          workTimeEnd.addEventListener("change", () => this.updateDayTotal());
+        }
+      }, 50);
+
+      // Находим блок для отображения итогового времени
+      const dayHoursContainer = document.getElementById("dayHoursContainer");
+
+      if (dayHoursContainer) {
+        // Вставляем перед блоком с итоговым временем
+        dayHoursContainer.insertAdjacentHTML("beforebegin", workHoursHTML);
+
+        // Добавляем обработчики с небольшой задержкой чтобы DOM успел обновиться
+        setTimeout(() => {
+          const workTimeStart = document.getElementById("workTimeStart");
+          const workTimeEnd = document.getElementById("workTimeEnd");
+
+          if (workTimeStart) {
+            workTimeStart.addEventListener("change", () =>
+              this.updateDayTotal()
+            );
+          }
+          if (workTimeEnd) {
+            workTimeEnd.addEventListener("change", () => this.updateDayTotal());
+          }
+        }, 50);
+      }
+    }
 
     if (!entries || entries.length === 0) {
       this.addEntry();
@@ -994,43 +1407,43 @@ class WorkTrackerApp {
     const positionPrice = position ? position.price : 0;
 
     row.innerHTML = `
-            <div class="entry-header">
-                <div class="entry-number">Позиция ${index + 1}</div>
-                <button class="delete-entry" type="button" data-index="${index}">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="entry-fields">
-                <div class="form-field">
-                    <label>Позиция</label>
-                    <select class="input position-select" data-index="${index}">
-                        <option value="">Выберите позицию</option>
-                        ${this.data.positions
-                          .map(
-                            (p) => `
-                            <option value="${p.id}" ${
-                              positionId === p.id ? "selected" : ""
-                            }>
-                                ${p.name} (${p.price.toLocaleString()} ₽)
-                            </option>
-                        `
-                          )
-                          .join("")}
-                    </select>
-                </div>
-                <div class="form-field">
-                    <label>Количество</label>
-                    <input type="number" class="input quantity-input" data-index="${index}" 
-                           value="${quantity}" min="0" step="1" placeholder="0">
-                </div>
-                <div class="entry-total" data-index="${index}">
-                    <span>Сумма:</span>
-                    <span class="entry-total-value">${
-                      entry ? (quantity * positionPrice).toLocaleString() : "0"
-                    } ₽</span>
-                </div>
-            </div>
-        `;
+    <div class="entry-header">
+      <div class="entry-number">Позиция ${index + 1}</div>
+      <button class="delete-entry" type="button" data-index="${index}">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="entry-fields">
+      <div class="form-field">
+        <label>Позиция</label>
+        <select class="input position-select" data-index="${index}">
+          <option value="">Выберите позицию</option>
+          ${this.data.positions
+            .map(
+              (p) => `
+              <option value="${p.id}" ${positionId === p.id ? "selected" : ""}>
+                ${p.name} (${p.price.toLocaleString()} ₽)
+              </option>
+            `
+            )
+            .join("")}
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Количество</label>
+        <input type="number" class="input quantity-input" data-index="${index}" 
+               value="${quantity}" min="0" step="1" placeholder="0">
+      </div>
+      <div class="entry-total" data-index="${index}">
+        <div class="entry-total-row">
+          <span>Сумма:</span>
+          <span class="entry-total-value">${
+            entry ? (quantity * positionPrice).toLocaleString() : "0"
+          } ₽</span>
+        </div>
+      </div>
+    </div>
+  `;
 
     container.appendChild(row);
 
@@ -1044,6 +1457,73 @@ class WorkTrackerApp {
     );
     quantityInput.addEventListener("input", () => this.updateEntryTotal(index));
     deleteBtn.addEventListener("click", () => this.deleteEntry(index));
+  }
+
+  // Метод для расчета отработанных часов с учетом перерыва
+  calculateWorkHours(startTime, endTime) {
+    if (!startTime || !endTime || startTime === "" || endTime === "") return 0;
+
+    try {
+      const startParts = startTime.split(":");
+      const endParts = endTime.split(":");
+
+      if (startParts.length < 2 || endParts.length < 2) return 0;
+
+      const startHour = parseInt(startParts[0]) || 0;
+      const startMinute = parseInt(startParts[1]) || 0;
+      const endHour = parseInt(endParts[0]) || 0;
+      const endMinute = parseInt(endParts[1]) || 0;
+
+      let totalMinutes =
+        endHour * 60 + endMinute - (startHour * 60 + startMinute);
+
+      // Вычитаем 1 час (60 минут) на перерыв
+      totalMinutes = Math.max(0, totalMinutes - 60);
+
+      // Округляем до ближайших 15 минут
+      const roundedMinutes = Math.round(totalMinutes / 15) * 15;
+
+      // Возвращаем в часах с долями
+      return roundedMinutes / 60;
+    } catch (error) {
+      console.error("Ошибка расчета времени:", error);
+      return 0;
+    }
+  }
+
+  // Метод для форматирования часов в читаемый вид
+  formatWorkHours(hours) {
+    const totalMinutes = Math.round(hours * 60);
+    const hoursPart = Math.floor(totalMinutes / 60);
+    const minutesPart = totalMinutes % 60;
+
+    if (hoursPart === 0 && minutesPart === 0) {
+      return "0ч 0м";
+    }
+
+    if (minutesPart === 0) {
+      return `${hoursPart}ч`;
+    }
+
+    if (hoursPart === 0) {
+      return `${minutesPart}м`;
+    }
+
+    return `${hoursPart}ч ${minutesPart}м`;
+  }
+
+  // Метод для расчета общего времени за день
+  calculateTotalWorkHours(entries) {
+    if (!entries || entries.length === 0) return 0;
+
+    let totalHours = 0;
+    entries.forEach((entry) => {
+      if (entry.timeStart && entry.timeEnd) {
+        totalHours += this.calculateWorkHours(entry.timeStart, entry.timeEnd);
+      }
+    });
+
+    return totalHours;
   }
 
   addEntry() {
@@ -1107,7 +1587,7 @@ class WorkTrackerApp {
   updateEntryTotal(index) {
     const container = document.getElementById("entriesList");
     const row = container.querySelector(`[data-index="${index}"]`);
-    if (!row) return;
+    if (!row) return { total: 0, workHours: 0 };
 
     const positionSelect = row.querySelector(".position-select");
     const quantityInput = row.querySelector(".quantity-input");
@@ -1116,18 +1596,22 @@ class WorkTrackerApp {
     const positionId = positionSelect.value;
     const quantity = parseFloat(quantityInput.value) || 0;
 
-    if (!positionId || quantity <= 0) {
-      totalElement.textContent = "0 ₽";
-      return 0;
+    // Обновляем сумму
+    let total = 0;
+    if (positionId && quantity > 0) {
+      const position = this.data.positions.find((p) => p.id == positionId);
+      if (position) {
+        total = position.price * quantity;
+      }
     }
 
-    const position = this.data.positions.find((p) => p.id == positionId);
-    if (!position) return 0;
+    // Убедитесь, что обновляется DOM
+    if (totalElement) {
+      totalElement.textContent = `${total.toLocaleString()} ₽`;
+    }
 
-    const total = position.price * quantity;
-    totalElement.textContent = `${total.toLocaleString()} ₽`;
-
-    return total;
+    // Время теперь рассчитывается отдельно для всего дня
+    return { total, workHours: 0 };
   }
 
   updateDayTotal() {
@@ -1135,14 +1619,58 @@ class WorkTrackerApp {
     const rows = Array.from(container.children);
     let total = 0;
 
+    // Пересчитываем каждую запись
     rows.forEach((row, index) => {
-      total += this.updateEntryTotal(index);
+      const result = this.updateEntryTotal(index);
+      total += result.total;
     });
 
-    document.getElementById(
-      "dayTotalValue"
-    ).textContent = `${total.toLocaleString()} ₽`;
-    return total;
+    // Обновляем ОДНУ сумму в заголовке
+    const dayTotalElement = document.getElementById("dayTotalValue");
+    if (dayTotalElement) {
+      dayTotalElement.textContent = `${total.toLocaleString()} ₽`;
+      dayTotalElement.classList.add("updated");
+      setTimeout(() => dayTotalElement.classList.remove("updated"), 300);
+    }
+
+    // Рассчитываем и обновляем общее время работы
+    const workTimeStart =
+      document.getElementById("workTimeStart")?.value || "08:00";
+    const workTimeEnd =
+      document.getElementById("workTimeEnd")?.value || "17:00";
+    const totalHours = this.calculateWorkHours(workTimeStart, workTimeEnd);
+
+    // Обновляем блок с часами
+    const hoursValue = document.querySelector(".day-summary-hours-value");
+
+    if (hoursValue) {
+      hoursValue.textContent = this.formatWorkHours(totalHours);
+      hoursValue.classList.add("updated");
+      setTimeout(() => hoursValue.classList.remove("updated"), 300);
+    }
+
+    return { total, totalHours };
+  }
+
+  // Создаем элемент для отображения общего времени
+  createDayHoursElement() {
+    const daySummaryContent = document.querySelector(".day-summary-content");
+    if (!daySummaryContent) return null;
+
+    // Проверяем, есть ли уже блок с деталями
+    let detailsContainer = document.querySelector(".day-summary-details");
+
+    if (!detailsContainer) {
+      detailsContainer = document.createElement("div");
+      detailsContainer.className = "day-summary-details";
+      daySummaryContent.appendChild(detailsContainer);
+    }
+
+    // Возвращаем элемент для часов
+    return {
+      hoursValue: document.querySelector(".day-summary-hours-value"),
+      amountValue: document.querySelector(".day-summary-amount-value"),
+    };
   }
 
   clearDay() {
@@ -1188,6 +1716,13 @@ class WorkTrackerApp {
     const monthKey = this.getMonthKey();
     const dayKey = this.getDayKey(this.currentDay);
 
+    // Получаем общее время работы
+    const workTimeStart =
+      document.getElementById("workTimeStart")?.value || "08:00";
+    const workTimeEnd =
+      document.getElementById("workTimeEnd")?.value || "17:00";
+    const totalHours = this.calculateWorkHours(workTimeStart, workTimeEnd);
+
     // Собираем данные
     const container = document.getElementById("entriesList");
     const rows = Array.from(container.children);
@@ -1210,6 +1745,7 @@ class WorkTrackerApp {
 
       hasValidEntries = true;
       const sum = position.price * quantity;
+
       dailyTotal += sum;
 
       entries.push({
@@ -1230,10 +1766,8 @@ class WorkTrackerApp {
         this.data.months[monthKey].days[dayKey];
 
       if (dayExists) {
-        // Удаляем день из данных
         delete this.data.months[monthKey].days[dayKey];
 
-        // Если в месяце не осталось дней, удаляем объект месяца
         if (Object.keys(this.data.months[monthKey].days).length === 0) {
           delete this.data.months[monthKey];
         }
@@ -1251,18 +1785,31 @@ class WorkTrackerApp {
       this.data.months[monthKey].days[dayKey] = {
         entries,
         dailyTotal,
+        totalHours, // Сохраняем рассчитанные часы
+        timeStart: workTimeStart,
+        timeEnd: workTimeEnd,
       };
 
       this.showToast(
         "Сохранено",
-        `Заработок за день: ${dailyTotal.toLocaleString()} ₽`,
+        `Заработок за день: ${dailyTotal.toLocaleString()} ₽ (${this.formatWorkHours(
+          totalHours
+        )})`,
         "success"
       );
     }
 
-    // В любом случае пересчитываем месяц и сохраняем
+    console.log("Daily total calculated:", dailyTotal);
+    console.log("Total hours calculated:", totalHours);
+
+    // Пересчитываем месяц и сохраняем
     this.calculateMonth(monthKey);
     this.saveData();
+
+    // Обновляем сводку если календарь видим
+    if (this.isCalendarVisible()) {
+      this.updateMonthSummary();
+    }
 
     // Обновляем кнопку на нижней панели
     this.updateBottomButton(this.currentDay);
@@ -1270,8 +1817,13 @@ class WorkTrackerApp {
     // Возвращаемся в календарь
     setTimeout(() => {
       this.showCalendar();
-      this.updateCalendar(); // Это обновит отображение дня в календаре
+      this.updateCalendar();
     }, 500);
+  }
+
+  calculateTotalWorkHours(dayData) {
+    if (!dayData || !dayData.timeStart || !dayData.timeEnd) return 0;
+    return this.calculateWorkHours(dayData.timeStart, dayData.timeEnd);
   }
 
   loadPositions() {

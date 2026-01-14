@@ -154,13 +154,28 @@
           </div>
         </div>
 
+        <!-- Сводка месяца -->
+        <div class="month-summary-section" id="monthSummarySection">
+          <div class="section-header">
+            <h2>Сводка за месяц</h2>
+            <div class="summary-stats">
+              <span id="workingDaysCount">0 рабочих дней</span>
+              <span id="monthTotal">0 ₽</span>
+            </div>
+          </div>
+
+          <div class="days-list" id="daysList">
+            <!-- Дни будут заполняться через JavaScript -->
+          </div>
+        </div>
+
         <!-- Форма ввода дня -->
         <div class="day-form-section" id="dayFormSection" style="display: none">
           <div class="form-header">
             <button class="back-btn" id="backBtn">
               <i class="fas fa-arrow-left"></i>
             </button>
-            <h2 id="dayTitle">1 января 2026</h2>
+            <h2 id="dayTitle">01.01.2026 Пт</h2>
             <div class="form-actions">
               <button
                 class="btn-icon danger"
@@ -178,8 +193,19 @@
 
           <div class="day-summary">
             <div class="day-summary-content">
-              <div class="day-summary-label">Итого за день</div>
+              <div class="day-summary-label">
+                <i class="fas fa-calculator"></i>
+                <span>ИТОГО ЗА ДЕНЬ</span>
+              </div>
               <div class="day-summary-value" id="dayTotalValue">0 ₽</div>
+              <div class="day-summary-details">
+                <div class="day-summary-hours">
+                  <div class="day-summary-hours-label">Отработано:</div>
+                  <div class="day-summary-hours-value" id="dayHoursValue">
+                    0ч 0м
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
