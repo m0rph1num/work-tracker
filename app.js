@@ -484,74 +484,6 @@ class WorkTrackerApp {
     // Устанавливаем флаг
     this.eventListenersSet = true;
     console.log("Обработчики событий настроены");
-
-    // Глобальный обработчик для отладки кликов по календарю
-    // document.addEventListener("click", (e) => {
-    //   if (e.target.closest(".calendar-day:not(.empty)")) {
-    //     console.log("Calendar day clicked via global handler");
-    //   }
-    // });
-
-    // Добавляем обработчики свайпа
-    this.setupSwipeHandlers();
-  }
-
-  // Метод для свайпа:
-  setupSwipeHandlers() {
-    const calendarGrid = document.getElementById("calendarGrid");
-    if (!calendarGrid) return;
-
-    calendarGrid.addEventListener(
-      "touchstart",
-      (e) => {
-        this.touchStartX = e.changedTouches[0].screenX;
-      },
-      { passive: true }
-    );
-
-    calendarGrid.addEventListener(
-      "touchend",
-      (e) => {
-        this.touchEndX = e.changedTouches[0].screenX;
-        this.handleSwipe();
-      },
-      { passive: true }
-    );
-
-    // Для десктопа - поддержка мыши
-    let mouseStartX = 0;
-    let mouseEndX = 0;
-
-    calendarGrid.addEventListener("mousedown", (e) => {
-      mouseStartX = e.clientX;
-    });
-
-    calendarGrid.addEventListener("mouseup", (e) => {
-      mouseEndX = e.clientX;
-      const diff = mouseEndX - mouseStartX;
-
-      if (Math.abs(diff) > this.swipeThreshold) {
-        if (diff > 0) {
-          this.changeMonth(-1); // Свайп вправо - предыдущий месяц
-        } else {
-          this.changeMonth(1); // Свайп влево - следующий месяц
-        }
-      }
-    });
-  }
-
-  handleSwipe() {
-    const diff = this.touchStartX - this.touchEndX;
-
-    if (Math.abs(diff) > this.swipeThreshold) {
-      if (diff > 0) {
-        this.changeMonth(1); // Свайп влево - следующий месяц
-        this.showToast("Месяц", "Следующий месяц", "info");
-      } else {
-        this.changeMonth(-1); // Свайп вправо - предыдущий месяц
-        this.showToast("Месяц", "Предыдущий месяц", "info");
-      }
-    }
   }
 
   // Метод для обновления сводки месяца:
@@ -1105,62 +1037,6 @@ class WorkTrackerApp {
         lastClickTime = 0;
         lastClickDay = null;
       }, 300);
-    });
-
-    // Добавляем обработчики свайпа
-    this.setupCalendarSwipeHandlers(calendarGrid);
-  }
-
-  // Метод для обработки свайпа в календаре:
-  setupCalendarSwipeHandlers(calendarGrid) {
-    let touchStartX = 0;
-    let touchEndX = 0;
-    const swipeThreshold = 50;
-
-    calendarGrid.addEventListener(
-      "touchstart",
-      (e) => {
-        touchStartX = e.changedTouches[0].screenX;
-      },
-      { passive: true }
-    );
-
-    calendarGrid.addEventListener(
-      "touchend",
-      (e) => {
-        touchEndX = e.changedTouches[0].screenX;
-        const diff = touchStartX - touchEndX;
-
-        if (Math.abs(diff) > swipeThreshold) {
-          if (diff > 0) {
-            this.changeMonth(1); // Свайп влево - следующий месяц
-          } else {
-            this.changeMonth(-1); // Свайп вправо - предыдущий месяц
-          }
-        }
-      },
-      { passive: true }
-    );
-
-    // Для десктопа
-    let mouseStartX = 0;
-    let mouseEndX = 0;
-
-    calendarGrid.addEventListener("mousedown", (e) => {
-      mouseStartX = e.clientX;
-    });
-
-    calendarGrid.addEventListener("mouseup", (e) => {
-      mouseEndX = e.clientX;
-      const diff = mouseEndX - mouseStartX;
-
-      if (Math.abs(diff) > swipeThreshold) {
-        if (diff > 0) {
-          this.changeMonth(-1); // Свайп вправо - предыдущий месяц
-        } else {
-          this.changeMonth(1); // Свайп влево - следующий месяц
-        }
-      }
     });
   }
 
