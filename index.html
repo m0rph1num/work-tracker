@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+
+    <!-- PWA-мета-теги: -->
+    <meta name="application-name" content="Учет работ" />
+    <meta name="apple-mobile-web-app-title" content="Учет работ" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="msapplication-TileColor" content="#6366f1" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <!-- Manifest -->
+    <link rel="manifest" href="manifest.json" />
+
+    <!-- HEAD -->
+    <title>Учет работ бригады 2026</title>
+    <link rel="stylesheet" href="style.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>"
+    />
+  </head>
+  <body>
+    <!-- Загрузочный экран -->
+    <div id="loader" class="loader">
+      <div class="loader-content">
+        <div class="loader-logo">📊</div>
+        <div class="loader-text">Загрузка данных...</div>
+        <div class="loader-progress">
+          <div class="progress-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Главный контейнер -->
+    <div class="app-container">
+      <!-- Верхняя панель -->
+      <header class="app-header">
+        <div class="header-top">
+          <div class="header-left">
+            <button class="header-btn menu-btn" id="menuBtn" aria-label="Меню">
+              <i class="fas fa-bars"></i>
+            </button>
+            <div class="app-brand">
+              <div class="app-icon">📊</div>
+              <div class="app-name">Учет работ</div>
+            </div>
+          </div>
+          <div class="header-right">
+            <div class="current-month" id="currentMonth">Январь 2026</div>
+          </div>
+        </div>
+
+        <!-- Быстрые действия -->
+        <div class="quick-actions">
+          <button class="quick-btn" id="prevMonthBtn">
+            <i class="fas fa-chevron-left"></i>
+            <span>Назад</span>
+          </button>
+          <button class="quick-btn primary" id="todayBtn">
+            <i class="fas fa-calendar-day"></i>
+            <span>Сегодня</span>
+          </button>
+          <button class="quick-btn" id="nextMonthBtn">
+            <i class="fas fa-chevron-right"></i>
+            <span>Вперед</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Основное содержимое -->
+      <main class="app-main" id="appMain">
+        <!-- Статистика месяца -->
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="fas fa-calculator"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">ИТОГО</div>
+              <div class="stat-value" id="totalAmount">0 ₽</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="fas fa-star"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">ПРЕМИЯ</div>
+              <div class="stat-value" id="premiumAmount">0 ₽</div>
+            </div>
+          </div>
+          <div class="stat-card highlight">
+            <div class="stat-icon">
+              <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">НА ЧЕЛОВЕКА</div>
+              <div class="stat-value" id="perPersonAmount">0 ₽</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Календарь -->
+        <div class="calendar-section">
+          <div class="section-header">
+            <h2>Календарь работ</h2>
+            <div class="month-selector">
+              <select id="monthSelect" class="select">
+                <option value="0">Январь</option>
+                <option value="1">Февраль</option>
+                <option value="2">Март</option>
+                <option value="3">Апрель</option>
+                <option value="4">Май</option>
+                <option value="5">Июнь</option>
+                <option value="6">Июль</option>
+                <option value="7">Август</option>
+                <option value="8">Сентябрь</option>
+                <option value="9">Октябрь</option>
+                <option value="10">Ноябрь</option>
+                <option value="11">Декабрь</option>
+              </select>
+              <div class="select-arrow">
+                <i class="fas fa-chevron-down"></i>
+              </div>
+            </div>
+          </div>
+
+          <div class="calendar-wrapper">
+            <div class="calendar-days-header">
+              <div class="day-header">Пн</div>
+              <div class="day-header">Вт</div>
+              <div class="day-header">Ср</div>
+              <div class="day-header">Чт</div>
+              <div class="day-header">Пт</div>
+              <div class="day-header">Сб</div>
+              <div class="day-header">Вс</div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid">
+              <!-- Дни заполняются через JavaScript -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Форма ввода дня -->
+        <div class="day-form-section" id="dayFormSection" style="display: none">
+          <div class="form-header">
+            <button class="back-btn" id="backBtn">
+              <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2 id="dayTitle">1 января 2026</h2>
+            <div class="form-actions">
+              <button
+                class="btn-icon danger"
+                id="clearDayBtn"
+                title="Очистить день"
+              >
+                <i class="fas fa-trash"></i>
+              </button>
+              <button class="btn-save" id="saveDayBtn">
+                <i class="fas fa-check"></i>
+                <span>Сохранить</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="day-summary">
+            <div class="day-summary-content">
+              <div class="day-summary-label">Итого за день</div>
+              <div class="day-summary-value" id="dayTotalValue">0 ₽</div>
+            </div>
+          </div>
+
+          <div class="entries-list" id="entriesList">
+            <!-- Записи заполняются через JavaScript -->
+          </div>
+
+          <div class="form-footer">
+            <button class="btn-add" id="addEntryBtn">
+              <i class="fas fa-plus"></i>
+              <span>Добавить позицию</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Справочник позиций -->
+        <div
+          class="positions-section"
+          id="positionsSection"
+          style="display: none"
+        >
+          <div class="section-header">
+            <button class="back-btn" id="backFromPositionsBtn">
+              <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Справочник позиций</h2>
+            <button class="btn-add-circle" id="addPositionBtn">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+
+          <div class="positions-container">
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input
+                type="text"
+                id="searchPositions"
+                placeholder="Поиск позиций..."
+                class="search-input"
+              />
+            </div>
+
+            <div class="positions-list" id="positionsList">
+              <!-- Позиции заполняются через JavaScript -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Настройки -->
+        <div
+          class="settings-section"
+          id="settingsSection"
+          style="display: none"
+        >
+          <div class="section-header">
+            <button class="back-btn" id="backFromSettingsBtn">
+              <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Настройки</h2>
+          </div>
+
+          <div class="settings-container">
+            <div class="settings-group">
+              <h3 class="group-title">Основные</h3>
+              <div class="setting-item">
+                <div class="setting-label">
+                  <i class="fas fa-users"></i>
+                  <span>Количество человек в бригаде</span>
+                </div>
+                <div class="setting-control">
+                  <input
+                    type="number"
+                    id="personCount"
+                    class="input"
+                    min="1"
+                    max="20"
+                    value="4"
+                  />
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-label">
+                  <i class="fas fa-chart-line"></i>
+                  <span>Коэффициент по умолчанию</span>
+                </div>
+                <div class="setting-control">
+                  <input
+                    type="number"
+                    id="defaultCoefficient"
+                    class="input"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.15"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="group-title">Внешний вид</h3>
+              <div class="setting-item">
+                <div class="setting-label">
+                  <i class="fas fa-palette"></i>
+                  <span>Тема оформления</span>
+                </div>
+                <div class="setting-control">
+                  <div class="theme-selector">
+                    <button class="theme-option active" data-theme="light">
+                      <i class="fas fa-sun"></i>
+                      <span>Светлая</span>
+                    </button>
+                    <button class="theme-option" data-theme="dark">
+                      <i class="fas fa-moon"></i>
+                      <span>Темная</span>
+                    </button>
+                    <button class="theme-option" data-theme="auto">
+                      <i class="fas fa-adjust"></i>
+                      <span>Авто</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="group-title">Данные</h3>
+              <div class="settings-buttons">
+                <button class="btn-setting" id="exportDataBtn">
+                  <i class="fas fa-file-export"></i>
+                  <span>Экспорт данных</span>
+                </button>
+                <button class="btn-setting" id="importDataBtn">
+                  <i class="fas fa-file-import"></i>
+                  <span>Импорт данных</span>
+                </button>
+                <button class="btn-setting danger" id="resetDataBtn">
+                  <i class="fas fa-trash"></i>
+                  <span>Сбросить все данные</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Коэффициенты -->
+        <div
+          class="coefficients-section"
+          id="coefficientsSection"
+          style="display: none"
+        >
+          <div class="section-header">
+            <button class="back-btn" id="backFromCoefficientsBtn">
+              <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Коэффициенты</h2>
+          </div>
+
+          <div class="coefficients-container">
+            <div class="info-box">
+              <i class="fas fa-info-circle"></i>
+              <p>Коэффициент применяется к общей сумме для расчета премии</p>
+            </div>
+
+            <div class="coefficients-list" id="coefficientsList">
+              <!-- Коэффициенты заполняются через JavaScript -->
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Нижняя навигация -->
+      <nav class="app-nav" id="appNav">
+        <button class="nav-item active" data-section="calendar">
+          <div class="nav-icon">
+            <i class="fas fa-calendar-alt"></i>
+          </div>
+          <div class="nav-label">Календарь</div>
+        </button>
+        <button class="nav-item" data-section="positions">
+          <div class="nav-icon">
+            <i class="fas fa-list"></i>
+          </div>
+          <div class="nav-label">Позиции</div>
+        </button>
+        <button
+          class="nav-item center-action"
+          id="quickAddBtn"
+          title="Выберите день для добавления записи"
+        >
+          <div class="center-icon">
+            <i class="fas fa-plus"></i>
+          </div>
+        </button>
+        <button class="nav-item" data-section="coefficients">
+          <div class="nav-icon">
+            <i class="fas fa-percentage"></i>
+          </div>
+          <div class="nav-label">Коэффициенты</div>
+        </button>
+        <button class="nav-item" data-section="settings">
+          <div class="nav-icon">
+            <i class="fas fa-cog"></i>
+          </div>
+          <div class="nav-label">Настройки</div>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Модальные окна -->
+    <div class="modal" id="modalOverlay" style="display: none">
+      <!-- Позиция -->
+      <div class="modal-content" id="positionModal">
+        <div class="modal-header">
+          <h3 id="positionModalTitle">Новая позиция</h3>
+          <button class="modal-close" id="closePositionModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-field">
+            <label for="positionName">Название позиции</label>
+            <input
+              type="text"
+              id="positionName"
+              class="input"
+              placeholder="Например: Кладка кирпича"
+            />
+          </div>
+          <div class="form-field">
+            <label for="positionPrice">Цена за единицу (₽)</label>
+            <input
+              type="number"
+              id="positionPrice"
+              class="input"
+              placeholder="1500"
+              min="0"
+              step="100"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="cancelPositionBtn">Отмена</button>
+          <button class="btn-primary" id="savePositionBtn">Сохранить</button>
+        </div>
+      </div>
+
+      <!-- Коэффициент -->
+      <div class="modal-content" id="coefficientModal">
+        <div class="modal-header">
+          <h3>Коэффициент для <span id="coefMonthName"></span></h3>
+          <button class="modal-close" id="closeCoefficientModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-field">
+            <label for="coefficientValue">Коэффициент премии</label>
+            <div class="input-with-suffix">
+              <input
+                type="number"
+                id="coefficientValue"
+                class="input"
+                min="0"
+                max="1"
+                step="0.01"
+                value="0.15"
+              />
+              <span class="input-suffix">%</span>
+            </div>
+            <div class="form-hint">Например: 0.15 = 15% от итога</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="cancelCoefficientBtn">
+            Отмена
+          </button>
+          <button class="btn-primary" id="saveCoefficientBtn">Сохранить</button>
+        </div>
+      </div>
+
+      <!-- Подтверждение -->
+      <div class="modal-content modal-sm" id="confirmModal">
+        <div class="modal-header">
+          <h3 id="confirmModalTitle">Подтверждение</h3>
+        </div>
+        <div class="modal-body">
+          <div class="confirm-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+          </div>
+          <p id="confirmModalMessage">Вы уверены?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="confirmCancelBtn">Отмена</button>
+          <button class="btn-danger" id="confirmOkBtn">Подтвердить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Скрытый input для импорта -->
+    <input type="file" id="fileImport" accept=".json" style="display: none" />
+
+    <!-- Уведомления -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Скрипты -->
+    <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      // ЭТА СТРОКА ДОЛЖНА БЫТЬ ТАКОЙ:
+      navigator.serviceWorker.register('/work-tracker/service-worker.js')
+        .then(function(registration) {
+          console.log('ServiceWorker успешно зарегистрирован:', registration.scope);
+        })
+        .catch(function(error) {
+          console.log('ServiceWorker ошибка:', error);
+        });
+    });
+  }
+</script>
+    <script src="app.js"></script>
+  </body>
+</html>
+
+
+
+
+

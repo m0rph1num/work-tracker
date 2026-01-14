@@ -1,0 +1,9 @@
+{
+  "name": "Учет работ бригады 2026",
+  "short_name": "Учет работ",
+  "description": "PWA для расчета заработка бригады",
+  "start_url": "/work-tracker/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1"
+}
