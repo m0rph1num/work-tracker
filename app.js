@@ -18,11 +18,7 @@ class WorkTrackerApp {
 
   setupOnlineOfflineHandlers() {
     window.addEventListener("online", () => {
-      this.showToast(
-        "Соединение восстановлено",
-        "Вы снова онлайн",
-        "success"
-      );
+      this.showToast("Соединение восстановлено", "Вы снова онлайн", "success");
     });
 
     window.addEventListener("offline", () => {
@@ -34,39 +30,45 @@ class WorkTrackerApp {
     });
   }
 
-setupOfflineFallback() {
-  // Этот метод теперь только для браузеров без поддержки Service Worker
-  if (!('serviceWorker' in navigator) && 'caches' in window) {
-    console.log('Используем fallback кэширование');
-    const cacheName = 'work-tracker-fallback';
-    const urlsToCache = [
-      '/work-tracker/',
-      '/work-tracker/index.html',
-      '/work-tracker/style.css',
-      '/work-tracker/app.js'
-    ];
+  setupOfflineFallback() {
+    // Этот метод теперь только для браузеров без поддержки Service Worker
+    if (!("serviceWorker" in navigator) && "caches" in window) {
+      console.log("Используем fallback кэширование");
+      const cacheName = "work-tracker-fallback";
+      const urlsToCache = [
+        "/work-tracker/",
+        "/work-tracker/index.html",
+        "/work-tracker/style.css",
+        "/work-tracker/app.js",
+      ];
 
-    caches.open(cacheName)
-      .then(cache => {
-        return cache.addAll(urlsToCache);
-      })
-      .catch(error => {
-        console.log('Fallback кэширование не удалось:', error);
-      });
+      caches
+        .open(cacheName)
+        .then((cache) => {
+          return cache.addAll(urlsToCache);
+        })
+        .catch((error) => {
+          console.log("Fallback кэширование не удалось:", error);
+        });
+    }
   }
-}
 
   init() {
     // Скрываем загрузчик с анимацией
     setTimeout(() => {
       const loader = document.getElementById("loader");
-      loader.style.opacity = "0";
-      loader.style.transform = "scale(0.95)";
+      if (loader) {
+        loader.style.opacity = "0";
+        loader.style.transform = "scale(0.95)";
 
-      setTimeout(() => {
-        loader.style.display = "none";
+        setTimeout(() => {
+          loader.style.display = "none";
+          this.setupApp();
+        }, 300);
+      } else {
+        // Если лоадер не найден, запускаем приложение сразу
         this.setupApp();
-      }, 300);
+      }
     }, 1000);
   }
 
@@ -165,43 +167,43 @@ setupOfflineFallback() {
   }
 
   // ДОБАВИТЬ метод для IndexedDB (опционально, но рекомендуется):
-saveToIndexedDB() {
-  if (!window.indexedDB) return;
+  saveToIndexedDB() {
+    if (!window.indexedDB) return;
 
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("WorkTrackerDB", 1);
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open("WorkTrackerDB", 1);
 
-    request.onerror = (event) => {
-      console.error("IndexedDB ошибка:", event.target.error);
-      reject(event.target.error);
-    };
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains("data")) {
-        db.createObjectStore("data", { keyPath: "id" });
-      }
-    };
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      const transaction = db.transaction(["data"], "readwrite");
-      const store = transaction.objectStore("data");
-      
-      const putRequest = store.put({ id: "main", data: this.data });
-      
-      putRequest.onsuccess = () => {
-        console.log("Данные сохранены в IndexedDB");
-        resolve();
+      request.onerror = (event) => {
+        console.error("IndexedDB ошибка:", event.target.error);
+        reject(event.target.error);
       };
-      
-      putRequest.onerror = (e) => {
-        console.error("Ошибка сохранения в IndexedDB:", e.target.error);
-        reject(e.target.error);
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains("data")) {
+          db.createObjectStore("data", { keyPath: "id" });
+        }
       };
-    };
-  });
-}
+
+      request.onsuccess = (event) => {
+        const db = event.target.result;
+        const transaction = db.transaction(["data"], "readwrite");
+        const store = transaction.objectStore("data");
+
+        const putRequest = store.put({ id: "main", data: this.data });
+
+        putRequest.onsuccess = () => {
+          console.log("Данные сохранены в IndexedDB");
+          resolve();
+        };
+
+        putRequest.onerror = (e) => {
+          console.error("Ошибка сохранения в IndexedDB:", e.target.error);
+          reject(e.target.error);
+        };
+      };
+    });
+  }
 
   setupTheme() {
     const theme = this.data.settings.theme || "light";
@@ -372,6 +374,20 @@ saveToIndexedDB() {
       document.getElementById("fileImport").click();
     };
     document.getElementById("resetDataBtn").onclick = () => this.resetData();
+    // Обработчики для новых кнопок в настройках
+    const openPositionsBtn = document.getElementById("openPositionsBtn");
+    if (openPositionsBtn) {
+      openPositionsBtn.onclick = () => {
+        this.showSection("positions");
+      };
+    }
+
+    const openCoefficientsBtn = document.getElementById("openCoefficientsBtn");
+    if (openCoefficientsBtn) {
+      openCoefficientsBtn.onclick = () => {
+        this.showSection("coefficients");
+      };
+    }
     document.getElementById("fileImport").onchange = (e) => this.importData(e);
 
     // Модальные окна
@@ -478,40 +494,58 @@ saveToIndexedDB() {
   }
 
   showSection(section) {
+    console.log("Переход к секции:", section);
+
     // Скрываем все секции
     const sections = [
-      "calendar", // ID в HTML: #calendarSection
-      "dayForm", // ID в HTML: #dayFormSection  <-- ИЗМЕНИТЬ: dayForm вместо day-form
-      "positions", // ID в HTML: #positionsSection
-      "settings", // ID в HTML: #settingsSection
-      "coefficients", // ID в HTML: #coefficientsSection
+      "calendar", // ID: #calendarSection
+      "dayForm", // ID: #dayFormSection
+      "positions", // ID: #positionsSection
+      "settings", // ID: #settingsSection
+      "coefficients", // ID: #coefficientsSection
     ];
 
+    // Скрываем ВСЕ секции
     sections.forEach((sec) => {
-      // У calendar нет отдельной секции, он часть основного контента
-      if (sec === "calendar") {
-        // Для календаря показываем/скрываем весь main контент
-        document.querySelector(".calendar-section").style.display = "block";
-        document.querySelector(".stats-grid").style.display = "grid";
-      } else {
-        const element = document.getElementById(`${sec}Section`);
-        if (element) {
-          element.style.display = "none";
-        }
+      const element = document.getElementById(`${sec}Section`);
+      if (element) {
+        element.style.display = "none";
       }
     });
+
+    // Скрываем статистику и календарь по умолчанию
+    const statsGrid = document.getElementById("statsGrid");
+    const calendarSection = document.querySelector(".calendar-section");
+
+    if (statsGrid) statsGrid.style.display = "none";
+    if (calendarSection) calendarSection.style.display = "none";
 
     // Показываем нужную секцию
     if (section === "calendar") {
       // Для календаря показываем основной контент
-      document.querySelector(".calendar-section").style.display = "block";
-      document.querySelector(".stats-grid").style.display = "grid";
+      if (statsGrid) statsGrid.style.display = "grid";
+      if (calendarSection) calendarSection.style.display = "block";
+
+      // Обновляем интерфейс
+      this.updateCalendar();
+      this.updateStats();
     } else {
       const targetElement = document.getElementById(`${section}Section`);
       if (targetElement) {
         targetElement.style.display = "block";
+
+        // Загружаем данные секции
+        if (section === "positions") {
+          this.loadPositions();
+        } else if (section === "coefficients") {
+          this.loadCoefficients();
+        } else if (section === "settings") {
+          this.loadSettings();
+        }
       } else {
         console.error(`Элемент #${section}Section не найден`);
+        // Fallback на календарь
+        this.showCalendar();
         return;
       }
     }
@@ -528,43 +562,26 @@ saveToIndexedDB() {
       navButton.classList.add("active");
     }
 
-    // Загружаем данные секции
-    if (section === "positions") {
-      this.loadPositions();
-    } else if (section === "coefficients") {
-      this.loadCoefficients();
-    } else if (section === "settings") {
-      this.loadSettings();
-    }
-
     // Прокручиваем вверх
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   showCalendar() {
     this.showSection("calendar");
-    this.updateCalendar();
-    this.updateStats();
 
-    // НЕ сбрасываем выбранный день при показе календаря
-    // только если не выбрали другой
-    if (!this.selectedDay) {
-      // Сбрасываем только если нет выбранного дня
-      this.currentDay = null;
-    }
-
-    // Возвращаем стандартную кнопку плюса
+    // Восстанавливаем стандартную кнопку плюса
     const quickAddBtn = document.getElementById("quickAddBtn");
-    if (this.selectedDay) {
-      // Если есть выбранный день, обновляем кнопку
-      this.updateBottomButton(this.selectedDay);
-    } else {
-      quickAddBtn.innerHTML = `
-      <div class="center-icon">
-        <i class="fas fa-plus"></i>
-      </div>
-    `;
-      quickAddBtn.title = "Выберите день для добавления записи";
+    if (quickAddBtn) {
+      if (this.selectedDay) {
+        this.updateBottomButton(this.selectedDay);
+      } else {
+        quickAddBtn.innerHTML = `
+        <div class="center-icon">
+          <i class="fas fa-plus"></i>
+        </div>
+      `;
+        quickAddBtn.title = "Выберите день для добавления записи";
+      }
     }
   }
 
@@ -1662,16 +1679,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Регистрируем Service Worker если поддерживается
-  if ('serviceWorker' in navigator) {
+  if ("serviceWorker" in navigator) {
     // Всегда используем относительный путь
-    const swPath = './service-worker.js';
-    
-    navigator.serviceWorker.register(swPath)
-      .then(registration => {
-        console.log('ServiceWorker успешно зарегистрирован:', registration.scope);
+    const swPath = "./service-worker.js";
+
+    navigator.serviceWorker
+      .register(swPath)
+      .then((registration) => {
+        console.log(
+          "ServiceWorker успешно зарегистрирован:",
+          registration.scope
+        );
       })
-      .catch(error => {
-        console.log('ServiceWorker registration failed:', error);
+      .catch((error) => {
+        console.log("ServiceWorker registration failed:", error);
         // Продолжаем работу без Service Worker
       });
   }
@@ -1679,4 +1700,3 @@ document.addEventListener("DOMContentLoaded", () => {
   // Инициализируем приложение
   window.app = new WorkTrackerApp();
 });
-

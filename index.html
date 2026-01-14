@@ -53,12 +53,9 @@
       <header class="app-header">
         <div class="header-top">
           <div class="header-left">
-            <button class="header-btn menu-btn" id="menuBtn" aria-label="Меню">
-              <i class="fas fa-bars"></i>
-            </button>
             <div class="app-brand">
               <div class="app-icon">📊</div>
-              <div class="app-name">Учет работ</div>
+              <div class="app-name">WorkTracker</div>
             </div>
           </div>
           <div class="header-right">
@@ -326,6 +323,33 @@
               </div>
             </div>
           </div>
+          <div class="settings-group">
+            <h3 class="group-title">Справочники</h3>
+            <div class="setting-item">
+              <div class="setting-label">
+                <i class="fas fa-list"></i>
+                <span>Позиции</span>
+              </div>
+              <div class="setting-control">
+                <button class="btn-setting" id="openPositionsBtn">
+                  <i class="fas fa-external-link-alt"></i>
+                  <span>Открыть справочник позиций</span>
+                </button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-label">
+                <i class="fas fa-percentage"></i>
+                <span>Коэффициенты</span>
+              </div>
+              <div class="setting-control">
+                <button class="btn-setting" id="openCoefficientsBtn">
+                  <i class="fas fa-external-link-alt"></i>
+                  <span>Открыть коэффициенты</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Коэффициенты -->
@@ -362,12 +386,6 @@
           </div>
           <div class="nav-label">Календарь</div>
         </button>
-        <button class="nav-item" data-section="positions">
-          <div class="nav-icon">
-            <i class="fas fa-list"></i>
-          </div>
-          <div class="nav-label">Позиции</div>
-        </button>
         <button
           class="nav-item center-action"
           id="quickAddBtn"
@@ -377,12 +395,7 @@
             <i class="fas fa-plus"></i>
           </div>
         </button>
-        <button class="nav-item" data-section="coefficients">
-          <div class="nav-icon">
-            <i class="fas fa-percentage"></i>
-          </div>
-          <div class="nav-label">Коэффициенты</div>
-        </button>
+
         <button class="nav-item" data-section="settings">
           <div class="nav-icon">
             <i class="fas fa-cog"></i>
@@ -490,24 +503,23 @@
 
     <!-- Скрипты -->
     <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-      // ЭТА СТРОКА ДОЛЖНА БЫТЬ ТАКОЙ:
-      navigator.serviceWorker.register('/work-tracker/service-worker.js')
-        .then(function(registration) {
-          console.log('ServiceWorker успешно зарегистрирован:', registration.scope);
-        })
-        .catch(function(error) {
-          console.log('ServiceWorker ошибка:', error);
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          // Используем относительный путь без префикса /work-tracker/
+          navigator.serviceWorker
+            .register("service-worker.js")
+            .then(function (registration) {
+              console.log(
+                "ServiceWorker успешно зарегистрирован:",
+                registration.scope
+              );
+            })
+            .catch(function (error) {
+              console.log("ServiceWorker ошибка:", error);
+            });
         });
-    });
-  }
-</script>
+      }
+    </script>
     <script src="app.js"></script>
   </body>
 </html>
-
-
-
-
-
