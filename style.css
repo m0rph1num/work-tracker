@@ -2369,6 +2369,25 @@ body {
   font-size: 1rem;
 }
 
+/* В style.css добавьте */
+.day-summary-hours-label i {
+  margin-right: 0.25rem;
+  font-size: 0.875rem;
+}
+
+/* Цвета для разных типов смен */
+.night-shift .day-summary-hours-value {
+  color: #8b5cf6; /* Фиолетовый для ночных смен */
+}
+
+.morning-shift .day-summary-hours-value {
+  color: #f59e0b; /* Оранжевый для утренних смен */
+}
+
+.day-shift .day-summary-hours-value {
+  color: #10b981; /* Зеленый для дневных смен */
+}
+
 /* ====== СВОДКА МЕСЯЦА: элементы дней ====== */
 .day-summary-item {
   background: var(--card-bg);

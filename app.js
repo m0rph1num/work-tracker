@@ -102,11 +102,40 @@ class WorkTrackerApp {
     } else {
       try {
         this.data = JSON.parse(localStorage.getItem("workTrackerData"));
+
+        // Миграция: добавляем поле totalHours для существующих записей
+        this.migrateData();
       } catch (e) {
         console.error("Ошибка загрузки данных:", e);
         this.data = this.getInitialData();
         this.saveData();
       }
+    }
+  }
+
+  // Метод миграции для добавления totalHours к старым данным
+  migrateData() {
+    let needsMigration = false;
+
+    Object.keys(this.data.months || {}).forEach((monthKey) => {
+      const monthData = this.data.months[monthKey];
+      Object.keys(monthData.days || {}).forEach((dayKey) => {
+        const dayData = monthData.days[dayKey];
+
+        // Если есть время, но нет totalHours - добавляем
+        if (dayData.timeStart && dayData.timeEnd && !dayData.totalHours) {
+          dayData.totalHours = this.calculateWorkHours(
+            dayData.timeStart,
+            dayData.timeEnd
+          );
+          needsMigration = true;
+        }
+      });
+    });
+
+    if (needsMigration) {
+      this.saveData();
+      console.log("Миграция данных выполнена");
     }
   }
 
@@ -555,7 +584,6 @@ class WorkTrackerApp {
     return "дней";
   }
 
-  // Метод для обновления списка дней:
   updateDaysList(days) {
     const container = document.getElementById("daysList");
     if (!container) return;
@@ -593,8 +621,9 @@ class WorkTrackerApp {
 
       const fullDate = `${dayFormatted}.${monthFormatted}.${year} ${weekdayShort}`;
 
-      // Форматируем время
+      // Используем сохраненные часы или рассчитываем заново
       let totalHours = dayData.totalHours || 0;
+
       if (!totalHours && dayData.timeStart && dayData.timeEnd) {
         totalHours = this.calculateWorkHours(
           dayData.timeStart,
@@ -607,13 +636,16 @@ class WorkTrackerApp {
       let detailsHTML = "";
       if (dayData.entries && dayData.entries.length > 0) {
         dayData.entries.forEach((entry) => {
+          // ИЗМЕНЕНИЕ ЗДЕСЬ: новый формат отображения
           detailsHTML += `
           <div class="position-item">
             <div class="position-item-info">
               <span>${entry.positionName}</span>
             </div>
             <div class="position-item-quantity">
-              <span>${entry.quantity} × ${entry.price.toLocaleString()} ₽</span>
+              <span>${entry.quantity} шт = <strong>${(
+            entry.quantity * entry.price
+          ).toLocaleString()} ₽</strong></span>
             </div>
           </div>
         `;
@@ -621,19 +653,23 @@ class WorkTrackerApp {
       }
 
       html += `
-<div class="day-summary-item" data-day="${day}">
-  <div class="day-summary-header">
-    <div class="day-summary-date">
-      ${fullDate}
-    </div>
-    <div class="day-summary-total">
-      <span class="day-summary-hours">${formattedHours}</span>
-      <span class="day-summary-amount">${dayData.dailyTotal.toLocaleString()} ₽</span>
-    </div>
-  </div>
-  ${detailsHTML ? `<div class="day-summary-details">${detailsHTML}</div>` : ""}
-</div>
-`;
+      <div class="day-summary-item" data-day="${day}">
+        <div class="day-summary-header">
+          <div class="day-summary-date">
+            ${fullDate}
+          </div>
+          <div class="day-summary-total">
+            <span class="day-summary-hours">${formattedHours}</span>
+            <span class="day-summary-amount">${dayData.dailyTotal.toLocaleString()} ₽</span>
+          </div>
+        </div>
+        ${
+          detailsHTML
+            ? `<div class="day-summary-details">${detailsHTML}</div>`
+            : ""
+        }
+      </div>
+    `;
     });
 
     container.innerHTML = html;
@@ -1274,8 +1310,16 @@ class WorkTrackerApp {
         workTimeEnd.value = dayData.timeEnd;
       }
 
-      // Обновляем итог
+      // Обновляем итог с учетом сохраненного времени
       this.updateDayTotal();
+
+      // Убедимся, что часы отображаются правильно
+      if (dayData.totalHours) {
+        const hoursValue = document.querySelector(".day-summary-hours-value");
+        if (hoursValue) {
+          hoursValue.textContent = this.formatWorkHours(dayData.totalHours);
+        }
+      }
     }, 100);
 
     // Обновляем итог в заголовке формы
@@ -1303,6 +1347,30 @@ class WorkTrackerApp {
         }
       }
     }, 200);
+  }
+
+  getShiftType(startTime, endTime) {
+    if (!startTime || !endTime) return "";
+
+    const startParts = startTime.split(":");
+    const endParts = endTime.split(":");
+
+    if (startParts.length < 2 || endParts.length < 2) return "";
+
+    const startHour = parseInt(startParts[0]) || 0;
+    const endHour = parseInt(endParts[0]) || 0;
+
+    // Если время окончания меньше времени начала или позднее 22:00 - ночная смена
+    if (endHour < startHour || startHour >= 22 || endHour <= 6) {
+      return "🌙 Ночная";
+    }
+
+    // Если смена начинается до 6 утра - утренняя
+    if (startHour < 6) {
+      return "☀️ Утренняя";
+    }
+
+    return "🌞 Дневная";
   }
 
   loadDayEntries(entries) {
@@ -1460,6 +1528,7 @@ class WorkTrackerApp {
   }
 
   // Метод для расчета отработанных часов с учетом перерыва
+  // Метод для расчета отработанных часов с учетом перерыва и ночных смен
   calculateWorkHours(startTime, endTime) {
     if (!startTime || !endTime || startTime === "" || endTime === "") return 0;
 
@@ -1474,11 +1543,23 @@ class WorkTrackerApp {
       const endHour = parseInt(endParts[0]) || 0;
       const endMinute = parseInt(endParts[1]) || 0;
 
-      let totalMinutes =
-        endHour * 60 + endMinute - (startHour * 60 + startMinute);
+      // Рассчитываем общее количество минут с начала дня
+      const startTotalMinutes = startHour * 60 + startMinute;
+      let endTotalMinutes = endHour * 60 + endMinute;
 
-      // Вычитаем 1 час (60 минут) на перерыв
-      totalMinutes = Math.max(0, totalMinutes - 60);
+      // Если время окончания меньше времени начала (ночная смена),
+      // добавляем 24 часа к времени окончания
+      if (endTotalMinutes < startTotalMinutes) {
+        endTotalMinutes += 24 * 60; // Добавляем полные сутки в минутах
+      }
+
+      let totalMinutes = endTotalMinutes - startTotalMinutes;
+
+      // Вычитаем 1 час (60 минут) на перерыв, если смена длится больше 4 часов
+      if (totalMinutes > 240) {
+        // 4 часа = 240 минут
+        totalMinutes = Math.max(0, totalMinutes - 60);
+      }
 
       // Округляем до ближайших 15 минут
       const roundedMinutes = Math.round(totalMinutes / 15) * 15;
@@ -1498,18 +1579,16 @@ class WorkTrackerApp {
     const minutesPart = totalMinutes % 60;
 
     if (hoursPart === 0 && minutesPart === 0) {
-      return "0ч 0м";
+      return "0ч 00м";
     }
 
     if (minutesPart === 0) {
       return `${hoursPart}ч`;
     }
 
-    if (hoursPart === 0) {
-      return `${minutesPart}м`;
-    }
-
-    return `${hoursPart}ч ${minutesPart}м`;
+    // Для красивого отображения: всегда показываем минуты двузначными
+    const formattedMinutes = minutesPart.toString().padStart(2, "0");
+    return `${hoursPart}ч ${formattedMinutes}м`;
   }
 
   // Метод для расчета общего времени за день
@@ -1640,13 +1719,28 @@ class WorkTrackerApp {
       document.getElementById("workTimeEnd")?.value || "17:00";
     const totalHours = this.calculateWorkHours(workTimeStart, workTimeEnd);
 
+    // Определяем тип смены
+    const shiftType = this.getShiftType(workTimeStart, workTimeEnd);
+
     // Обновляем блок с часами
     const hoursValue = document.querySelector(".day-summary-hours-value");
+    const hoursLabel = document.querySelector(".day-summary-hours-label");
 
     if (hoursValue) {
       hoursValue.textContent = this.formatWorkHours(totalHours);
       hoursValue.classList.add("updated");
       setTimeout(() => hoursValue.classList.remove("updated"), 300);
+    }
+
+    // Можно добавить иконку или текст о типе смены
+    if (hoursLabel) {
+      if (shiftType.includes("Ночная")) {
+        hoursLabel.innerHTML = '<i class="fas fa-moon"></i> Отработано:';
+      } else if (shiftType.includes("Утренняя")) {
+        hoursLabel.innerHTML = '<i class="fas fa-sun"></i> Отработано:';
+      } else {
+        hoursLabel.innerHTML = '<i class="fas fa-sun"></i> Отработано:';
+      }
     }
 
     return { total, totalHours };
@@ -1759,11 +1853,7 @@ class WorkTrackerApp {
 
     // Если записей нет, удаляем день из данных
     if (!hasValidEntries) {
-      // Проверяем, есть ли день для удаления
-      const dayExists =
-        this.data.months[monthKey] &&
-        this.data.months[monthKey].days &&
-        this.data.months[monthKey].days[dayKey];
+      const dayExists = this.data.months[monthKey]?.days?.[dayKey];
 
       if (dayExists) {
         delete this.data.months[monthKey].days[dayKey];
@@ -1788,6 +1878,8 @@ class WorkTrackerApp {
         totalHours, // Сохраняем рассчитанные часы
         timeStart: workTimeStart,
         timeEnd: workTimeEnd,
+        // Добавляем метку времени последнего обновления
+        updatedAt: new Date().toISOString(),
       };
 
       this.showToast(
@@ -1798,9 +1890,6 @@ class WorkTrackerApp {
         "success"
       );
     }
-
-    console.log("Daily total calculated:", dailyTotal);
-    console.log("Total hours calculated:", totalHours);
 
     // Пересчитываем месяц и сохраняем
     this.calculateMonth(monthKey);
