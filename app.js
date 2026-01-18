@@ -1258,19 +1258,19 @@ class WorkTrackerApp {
     if (daySummaryContent && !document.getElementById("dayWorkHours")) {
       // Создаем блок для времени работы
       const workHoursHTML = `
-  <div class="day-work-hours" id="dayWorkHours">
-    <div class="work-hours-header">
-      <div class="work-hours-label">Время работы</div>
-      <div class="work-hours-inputs">
-        <input type="time" id="workTimeStart" class="input work-time-input" 
-               value="08:00" placeholder="Начало">
-        <span class="work-hours-separator">—</span>
-        <input type="time" id="workTimeEnd" class="input work-time-input" 
-               value="17:00" placeholder="Конец">
-      </div>
-    </div>
-  </div>
-  `;
+            <div class="day-work-hours" id="dayWorkHours">
+                <div class="work-hours-header">
+                    <div class="work-hours-label">Время работы</div>
+                    <div class="work-hours-inputs">
+                        <input type="time" id="workTimeStart" class="input work-time-input" 
+                               value="08:00" placeholder="Начало">
+                        <span class="work-hours-separator">—</span>
+                        <input type="time" id="workTimeEnd" class="input work-time-input" 
+                               value="17:00" placeholder="Конец">
+                    </div>
+                </div>
+            </div>
+        `;
 
       // Проверяем, есть ли уже блок с временем
       if (!document.getElementById("dayWorkHours")) {
@@ -1293,29 +1293,6 @@ class WorkTrackerApp {
           workTimeEnd.addEventListener("change", () => this.updateDayTotal());
         }
       }, 50);
-
-      // Находим блок для отображения итогового времени
-      const dayHoursContainer = document.getElementById("dayHoursContainer");
-
-      if (dayHoursContainer) {
-        // Вставляем перед блоком с итоговым временем
-        dayHoursContainer.insertAdjacentHTML("beforebegin", workHoursHTML);
-
-        // Добавляем обработчики с небольшой задержкой чтобы DOM успел обновиться
-        setTimeout(() => {
-          const workTimeStart = document.getElementById("workTimeStart");
-          const workTimeEnd = document.getElementById("workTimeEnd");
-
-          if (workTimeStart) {
-            workTimeStart.addEventListener("change", () =>
-              this.updateDayTotal()
-            );
-          }
-          if (workTimeEnd) {
-            workTimeEnd.addEventListener("change", () => this.updateDayTotal());
-          }
-        }, 50);
-      }
     }
 
     if (!entries || entries.length === 0) {
@@ -1686,7 +1663,7 @@ class WorkTrackerApp {
     const monthKey = this.getMonthKey();
     const dayKey = this.getDayKey(this.currentDay);
 
-    // Получаем общее время работы
+    // Получаем общее время работы из DOM элементов
     const workTimeStart =
       document.getElementById("workTimeStart")?.value || "08:00";
     const workTimeEnd =
